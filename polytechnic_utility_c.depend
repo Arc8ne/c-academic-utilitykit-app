@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1656248874 source:c:\dev\cprojects\polytechnic_utility_c\main.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<conio.h>
+
