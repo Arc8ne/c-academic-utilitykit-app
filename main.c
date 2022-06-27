@@ -121,6 +121,54 @@ void add_task_to_user_list(User* user_ptr, Task* task_to_add)
     user_ptr->task_count++;
 }
 
+int submit_task_for_user(User* user_ptr, int task_index)
+{
+    /*
+    returns a value other than 0 if not successful, the value of the integer returned tells what caused the operation to be
+    unsuccessful
+    */
+
+    //error handling
+    if (user_ptr->task_list[task_index] == NULL)
+    {
+        //printf("Error: Pointer to task at specified index: %d is null.\n", task_index);
+
+        return -1;
+    }
+    else if (task_index >= user_ptr->task_count)
+    {
+        //printf("Error: Attempting to access a value outside of the tasks array (greater than/equal to total task count).\n");
+
+        //printf("Value of index supplied to function: %d\n", task_index);
+
+        return -2;
+    }
+    else if (task_index < 0)
+    {
+        //printf("Error: Attempting to access a value outside of the tasks array (lesser than zero).\n");
+
+        //printf("Value of index supplied to function: %d\n", task_index);
+
+        return -3;
+    }
+
+    if (user_ptr->task_list[task_index]->task_status == SUBMITTED)
+    {
+        printf("This assignment has already been submitted.\n");
+
+        return 1;
+    }
+    else
+    {
+        user_ptr->task_list[task_index]->task_status = SUBMITTED;
+
+        //printf("Task submitted successfully.\n);
+    }
+
+    return 0;
+    //returns 0 if successful
+}
+
 int remove_task_from_user_list(User* user_ptr, int task_index)
 {
     if (task_index >= user_ptr->task_count || task_index < 0)
@@ -298,7 +346,7 @@ void load_user_tasks_data(User* user_ptr)
 
     int temp_is_group_task = 0;
 
-    while (fscanf(user_tasks_file_ptr, "%s %d %d %d\n", temp_task_name, &temp_task_type, &temp_task_status, &temp_is_group_task) != EOF)
+    while (fscanf(user_tasks_file_ptr, "%[^,],%d,%d,%d\n", temp_task_name, &temp_task_type, &temp_task_status, &temp_is_group_task) != EOF)
     {
         Task* new_task_ptr = (Task*)malloc(sizeof(Task));
 
@@ -331,7 +379,7 @@ void save_user_tasks_data(User* user_ptr)
 
     for (int i = 0; i < user_ptr->task_count; i++)
     {
-        fprintf(user_tasks_file_ptr, "%s %d %d %d\n", user_ptr->task_list[i]->task_name, user_ptr->task_list[i]->task_type, user_ptr->task_list[i]->task_status, user_ptr->task_list[i]->is_group_task);
+        fprintf(user_tasks_file_ptr, "%s,%d,%d,%d\n", user_ptr->task_list[i]->task_name, user_ptr->task_list[i]->task_type, user_ptr->task_list[i]->task_status, user_ptr->task_list[i]->is_group_task);
     }
 }
 
@@ -834,9 +882,9 @@ int main()
 
             new_user_task_ptr->task_name = malloc(sizeof(char) * DEF_BUFFER_SIZE);
 
-            printf("Enter the name of the assignment (must not have spaces): ");
+            printf("Enter the name of the assignment: ");
 
-            scanf("%s", new_user_task_ptr->task_name);
+            scanf(" %[^\n]s", new_user_task_ptr->task_name);
 
             printf("Is the task a group task? (y/n) ");
 
@@ -878,7 +926,7 @@ int main()
 
             char temp_name_buffer[DEF_BUFFER_SIZE] = {0};
 
-            scanf("%s", temp_name_buffer);
+            scanf(" %[^\n]s", temp_name_buffer);
 
             int task_search_result = find_task_in_user_list_by_name(current_app_user, temp_name_buffer);
 
@@ -938,6 +986,40 @@ int main()
             if (account_found == 0)
             {
                 printf("No such account exists currently. Unable to recover password for '%s' account. Please ensure you have entered the correct username and try again.\n", temp_name_buffer);
+            }
+        }
+        else if (strcmp(command, "submit_assignment") == 0)
+        {
+            printf("Enter the name of the assignment you would like to submit: ");
+
+            char temp_char_buffer[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", temp_char_buffer);
+
+            int result_task_index = find_task_in_user_list_by_name(current_app_user, temp_char_buffer);
+
+            //the find_task_in_user_list_by_name() function returns -1 if no such task was found in the user's task list
+
+            if (result_task_index == -1)
+            {
+                printf("No assignment called '%s' exists. Please ensure that you have entered in the correct name for the assignment you would like to submit and try again.\n", temp_char_buffer);
+
+                continue;
+            }
+
+            int submission_process_result = submit_task_for_user(current_app_user, result_task_index);
+
+            if (submission_process_result < 0)
+            {
+                printf("An error has occurred while attempting to submit this assignment. Please check your error logs for more information on what happened.\n");
+                //error logs may be added in a future update
+
+                continue;
+            }
+
+            if (submission_process_result == 0)
+            {
+                printf("Submitted assignment '%s' successfully.\n", temp_char_buffer);
             }
         }
         else

@@ -6,10 +6,11 @@ register: to register/create a new account
 delete_account: to delete an existing account that has already been registered on this application
 clear: clears all text from the terminal
 recover_password: recovers a password for the account if you have forgotten it, requires username of the account to be entered
+view_assignments: to view all assignments that you currently have
+add_assignment: to add an assignment
+submit_assignment: to submit an assignment
 
 Future commands (still in development):
-view_assignments: to view all assignments that you currently have
 view_exams: to view all exams that you currently have
-add_assignment: to add an assignment
 add_exam: to add an exam
 settings: grants access to application settings
