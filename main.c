@@ -63,6 +63,34 @@ int app_message = 0;
 int password_mask_on = 1;
 
 //Functions
+int copy_int_to_buffer(int number, char* char_ptr)
+{
+    int current_remainder = 0;
+
+    int index = 0;
+
+    while (number > 0)
+    {
+        //printf("Current number: %d\n", number);
+
+        //printf("Current index: %d\n", index);
+
+        current_remainder = number % 10;
+
+        number /= 10;
+
+        char_ptr[index] = current_remainder + '0';
+
+        //printf("current digit: %c\n", char_ptr[index]);
+
+        index++;
+    }
+
+    //printf("Resulting buffer: %s\n", char_ptr);
+
+    return index;   //returns the number of digits (converted to chars) copied into the buffer (excluding null terminator)
+}
+
 void encrypt_daf_text(char* char_ptr)
 {
     int char_index = 0;
@@ -152,17 +180,48 @@ int submit_task_for_user(User* user_ptr, int task_index)
         return -3;
     }
 
-    if (user_ptr->task_list[task_index]->task_status == SUBMITTED)
-    {
-        printf("This assignment has already been submitted.\n");
 
-        return 1;
+    /*
+    Note: For future reference
+    submit task function non-negative return values
+    returns 0 if assignment submitted successfully
+    returns 1 if exam marked as finished successfully
+    returns 2 if assignment has already been submitted
+    returns 3 if exam has already been marked as finished
+    */
+    if (user_ptr->task_list[task_index]->task_type == ASSIGNMENT)
+    {
+        if (user_ptr->task_list[task_index]->task_status == SUBMITTED)
+        {
+            //printf("Error: The selected assignment at index %d has already been submitted.\n", task_index);
+
+            return 2;
+        }
+        else
+        {
+            user_ptr->task_list[task_index]->task_status = SUBMITTED;
+
+            //printf("Assignment submitted successfully.\n);
+
+            return 0;
+        }
     }
-    else
+    else if (user_ptr->task_list[task_index]->task_type == EXAM)
     {
-        user_ptr->task_list[task_index]->task_status = SUBMITTED;
+        if (user_ptr->task_list[task_index]->task_status == FINISHED)
+        {
+            //printf("Error: The selected exam at index %d has already been finished.\n", task_index);
 
-        //printf("Task submitted successfully.\n);
+            return 3;
+        }
+        else
+        {
+            user_ptr->task_list[task_index]->task_status = FINISHED;
+
+            //printf("Exam finished successfully.\n);
+
+            return 1;
+        }
     }
 
     return 0;
@@ -364,6 +423,8 @@ void load_user_tasks_data(User* user_ptr)
 
         user_ptr->task_count++;
     }
+
+    fclose(user_tasks_file_ptr);
 }
 
 void save_user_tasks_data(User* user_ptr)
@@ -473,7 +534,7 @@ void save_data()
     {
         //printf("decrypted user name: %s\n", users_list[i].user_name);
 
-        //printf("decrypted user password: %s\n", users_list[i].user_passwd);
+        //printf("decrypted user password: %s\n", users_list[i]->user_passwd);
 
         /*
         encrypts the user's username and password before writing them into the app data file only when app is about to
@@ -490,7 +551,7 @@ void save_data()
 
         //printf("encrypted user name: %s\n", users_list[i].user_name);
 
-        //printf("encrypted user password: %s\n", users_list[i].user_passwd);
+        //printf("encrypted user password: %s\n", users_list[i]->user_passwd);
 
         //printf("Encrypted text: %s\n", encrypted_text);
 
@@ -498,6 +559,47 @@ void save_data()
     }
 
     fclose(app_data_file_ptr);
+}
+
+void mask_read_input(char* temp_text_buffer, int is_mask_enabled)
+{
+    int text_buffer_i = 0;
+
+    /*
+    Note: For future reference
+    getch() returns 8 or '\b' (in integer form) when Backspace key is pressed
+    getch() returns '\r' (in integer form) when Enter key is pressed
+    */
+    while ((temp_text_buffer[text_buffer_i] = getch()) != '\r')
+    {
+        if (temp_text_buffer[text_buffer_i] == '\b')
+        {
+            if (text_buffer_i > 0)
+            {
+                text_buffer_i -= 1;
+
+                printf("\b \b");
+            }
+
+            continue;
+        }
+
+        if (is_mask_enabled == 1)
+        {
+            printf("*");
+        }
+        else
+        {
+            if (temp_text_buffer[text_buffer_i] != '\0' && temp_text_buffer[text_buffer_i] != '\b')
+            {
+                printf("%c", temp_text_buffer[text_buffer_i]);
+            }
+        }
+
+        text_buffer_i++;
+    }
+
+    temp_text_buffer[text_buffer_i] = '\0';
 }
 
 void init_main_menu()
@@ -512,23 +614,7 @@ void init_main_menu()
 
     char* temp_passwd_buffer = (char*)malloc(sizeof(char) * DEF_BUFFER_SIZE);
 
-    int passwd_buffer_i = 0;
-
-    while ((temp_passwd_buffer[passwd_buffer_i] = getch()) != '\r')
-    {
-        if (password_mask_on == 1)
-        {
-            printf("*");
-        }
-        else
-        {
-            printf("%c", temp_passwd_buffer[passwd_buffer_i]);
-        }
-
-        passwd_buffer_i++;
-    }
-
-    temp_passwd_buffer[passwd_buffer_i] = '\0';
+    mask_read_input(temp_passwd_buffer, password_mask_on);
 
     printf("\n");
 
@@ -610,7 +696,9 @@ void register_account()
 
     char temp_passwd_buffer[DEF_BUFFER_SIZE] = {0};
 
-    scanf("%s", temp_passwd_buffer);
+    mask_read_input(temp_passwd_buffer, password_mask_on);
+
+    printf("\n");
 
     if (strcmp(temp_name_buffer, "") != 0 && strcmp(temp_passwd_buffer, "") != 0)
     {
@@ -621,7 +709,11 @@ void register_account()
             return;
         }
 
+        //printf("Creating new user.\n");
+
         User* created_user = (User*)malloc(sizeof(User));
+
+        created_user->task_count = 0;
 
         created_user->user_name = (char*)malloc(sizeof(char) * DEF_BUFFER_SIZE);
 
@@ -635,6 +727,8 @@ void register_account()
 
         users_list[total_users_count - 1] = created_user;
 
+        //printf("About to call save data function.\n");
+
         save_data();
 
         printf("Account created successfully.\n");
@@ -645,6 +739,13 @@ void register_account()
 
         return;
     }
+}
+
+int delete_user_files(User* user_ptr)
+{
+    char* user_tasks_file_name = get_user_tasks_data_name(user_ptr);
+
+    return remove(user_tasks_file_name);
 }
 
 void delete_account()
@@ -659,7 +760,9 @@ void delete_account()
 
     char temp_passwd_buffer[DEF_BUFFER_SIZE] = {0};
 
-    scanf("%s", temp_passwd_buffer);
+    mask_read_input(temp_passwd_buffer, password_mask_on);
+
+    printf("\n");
 
     for (int i = 0; i < total_users_count; i++)
     {
@@ -674,6 +777,17 @@ void delete_account()
                 return;
             }
 
+            printf("Deleting files associated with user '%s'...\n", temp_name_buffer);
+
+            if (delete_user_files(users_list[i]) == 0)
+            {
+                printf("Files for user '%s' deleted successfully.\n", temp_name_buffer);
+            }
+            else
+            {
+                printf("Error: Unable to delete files for user '%s'.\n", temp_name_buffer);
+            }
+
             remove_user_in_list(users_list, i);
 
             save_data();
@@ -685,6 +799,47 @@ void delete_account()
     }
 
     printf("'%s' account not found.\n", temp_name_buffer);
+}
+
+int auto_create_python_files(char* file_name_prefix, int number_of_files, char* chosen_text)
+{
+    for (int i = 0; i < number_of_files; i++)
+    {
+        char number_suffix[DEF_BUFFER_SIZE] = {0};
+
+        copy_int_to_buffer(i + 1, number_suffix);
+
+        //printf("Number suffix result: %s\n", number_suffix);
+
+        char result_file_name[DEF_BUFFER_SIZE] = {0};
+
+        strcat(result_file_name, file_name_prefix);
+
+        strcat(result_file_name, number_suffix);
+
+        strcat(result_file_name, ".py");
+
+        //printf("Result python file name: %s\n", result_file_name);
+
+        //printf("Chosen text is: %s\n", chosen_text);
+
+        //Create and write chosen text to file
+        FILE* current_python_file_ptr = fopen(result_file_name, "w");
+
+        if (current_python_file_ptr == NULL)
+        {
+            printf("Error: Unable to create python file.\n");
+
+            return -1;
+        }
+
+        fprintf(current_python_file_ptr,"%s\n", chosen_text);
+
+        fclose(current_python_file_ptr);
+    }
+
+    return 0;
+    //returns 0 if successful
 }
 
 /*
@@ -932,7 +1087,7 @@ int main()
 
             if (task_search_result == -1)
             {
-                printf("Task not found.\n");
+                printf("Assignment not found.\n");
 
                 continue;
             }
@@ -941,7 +1096,7 @@ int main()
 
             printf("Assignment '%s' removed successfully.\n", temp_name_buffer);
         }
-        else if (strcmp(command, "view_assignments") == 0)
+        else if (strcmp(command, "view_all") == 0)
         {
             if (current_app_user == &guest_user)
             {
@@ -990,6 +1145,13 @@ int main()
         }
         else if (strcmp(command, "submit_assignment") == 0)
         {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently logged into an account. To recover the password of an account, you must be logged out. You can do so using the 'logout' command.\n");
+
+                continue;
+            }
+
             printf("Enter the name of the assignment you would like to submit: ");
 
             char temp_char_buffer[DEF_BUFFER_SIZE] = {0};
@@ -1017,10 +1179,173 @@ int main()
                 continue;
             }
 
+            //submit task function returns 1 if the selected task has already been submitted in the past
+            if (submission_process_result == 2)
+            {
+                printf("The assignment '%s' has already been submitted previously.\n", temp_char_buffer);
+
+                continue;
+            }
+
             if (submission_process_result == 0)
             {
                 printf("Submitted assignment '%s' successfully.\n", temp_char_buffer);
             }
+        }
+        else if (strcmp(command, "add_exam") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently not logged into any account yet. You must be logged into an account to use this feature.\n");
+
+                continue;
+            }
+
+            Task* new_user_task_ptr = (Task*)malloc(sizeof(Task));
+
+            new_user_task_ptr->task_type = EXAM;
+
+            new_user_task_ptr->is_group_task = INDIVIDUAL;
+
+            new_user_task_ptr->task_status = UPCOMING;
+
+            new_user_task_ptr->task_name = malloc(sizeof(char) * DEF_BUFFER_SIZE);
+
+            printf("Enter the name of the exam: ");
+
+            scanf(" %[^\n]s", new_user_task_ptr->task_name);
+
+            add_task_to_user_list(current_app_user, new_user_task_ptr);
+
+            printf("New exam '%s' created successfully.\n", new_user_task_ptr->task_name);
+        }
+        else if (strcmp(command, "remove_exam") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently not logged into any account yet. You must be logged into an account to use this feature.\n");
+
+                continue;
+            }
+
+            printf("Enter the name of the exam you would like to remove: ");
+
+            char temp_name_buffer[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", temp_name_buffer);
+
+            int task_search_result = find_task_in_user_list_by_name(current_app_user, temp_name_buffer);
+
+            if (task_search_result == -1)
+            {
+                printf("Exam not found.\n");
+
+                continue;
+            }
+
+            remove_task_from_user_list(current_app_user, task_search_result);
+
+            printf("Exam '%s' removed successfully.\n", temp_name_buffer);
+        }
+        else if (strcmp(command, "c_py") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently not logged into any account yet. You must be logged into an account to use this feature.\n");
+
+                continue;
+            }
+
+            printf("Please enter a starting file name: ");
+
+            char temp_file_name_buffer[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", temp_file_name_buffer);
+
+            printf("Enter the number of python files you would like to create: ");
+
+            int files_creation_count = 1;
+
+            scanf("%d", &files_creation_count);
+
+            printf("Enter some text you would like to put into the newly created python files: ");
+
+            char temp_chosen_text_buffer[MAX_CHARS_PER_LINE] = {0};
+
+            scanf(" %[^\n]s", temp_chosen_text_buffer);
+
+            int python_file_auto_creation_status = auto_create_python_files(temp_file_name_buffer, files_creation_count, temp_chosen_text_buffer);
+
+            //0 indicating success
+            if (python_file_auto_creation_status == 0)
+            {
+                printf("%d python files created successfully.\n", files_creation_count);
+            }
+            else
+            {
+                printf("Error: Unable to create python files.\n");
+            }
+        }
+        else if (strcmp(command, "finish_exam") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently logged into an account. To recover the password of an account, you must be logged out. You can do so using the 'logout' command.\n");
+
+                continue;
+            }
+
+            printf("Enter the name of the exam you would like to mark as finished: ");
+
+            char temp_char_buffer[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", temp_char_buffer);
+
+            int result_task_index = find_task_in_user_list_by_name(current_app_user, temp_char_buffer);
+
+            //the find_task_in_user_list_by_name() function returns -1 if no such task was found in the user's task list
+
+            if (result_task_index == -1)
+            {
+                printf("No exam called '%s' exists. Please ensure that you have entered in the correct name for the exam you would like to mark as finished and try again.\n", temp_char_buffer);
+
+                continue;
+            }
+
+            int submission_process_result = submit_task_for_user(current_app_user, result_task_index);
+
+            if (submission_process_result < 0)
+            {
+                printf("An error has occurred while attempting to mark this exam as finished. Please check your error logs for more information on what happened.\n");
+                //error logs may be added in a future update
+
+                continue;
+            }
+
+            //submit task function returns 1 if the selected task has already been submitted in the past
+            if (submission_process_result == 3)
+            {
+                printf("The exam '%s' has already been marked as finished previously.\n", temp_char_buffer);
+
+                continue;
+            }
+
+            if (submission_process_result == 1)
+            {
+                printf("Marked exam '%s' as finished successfully.\n", temp_char_buffer);
+            }
+        }
+        else if (strcmp(command, "enable_mask") == 0)
+        {
+            password_mask_on = 1;
+
+            printf("Password masking enabled successfully.\n");
+        }
+        else if (strcmp(command, "disable_mask") == 0)
+        {
+            password_mask_on = 0;
+
+            printf("Password masking disabled successfully.\n");
         }
         else
         {

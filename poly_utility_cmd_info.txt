@@ -6,11 +6,17 @@ register: to register/create a new account
 delete_account: to delete an existing account that has already been registered on this application
 clear: clears all text from the terminal
 recover_password: recovers a password for the account if you have forgotten it, requires username of the account to be entered
-view_assignments: to view all assignments that you currently have
+view_all: to view all assignments and exams that you currently have
 add_assignment: to add an assignment
 submit_assignment: to submit an assignment
+add_exam: to add an exam
+remove_exam: to remove an existing exam
+finish_exam: to mark an existing exam as finished
+c_py: short form for "create python files", automatically create a chosen number of files (specified by user) with user determined
+prefixes included in the file name to make them more easily identifiable, optionally the user can also choose to write some text to each file
+enable_mask: enables password masking, which is always enabled by default to reduce the risk of others seeing your password while
+you enter it, it is recommended to leave this setting enabled
+disable_mask: disables password masking, which may increase the risk of others seeing your password while you enter it
 
 Future commands (still in development):
-view_exams: to view all exams that you currently have
-add_exam: to add an exam
 settings: grants access to application settings
