@@ -9,7 +9,7 @@
 #define DEFAULT_DATA_FILE_PATH "C:\\Program Files\\poly_utility_app_data.daf"
 #define DEFAULT_CMD_INFO_FILE_NAME "poly_utility_cmd_info.txt"
 #define DEFAULT_CMD_INFO_FILE_PATH "C:\\Program Files\\poly_utility_cmd_info.txt"
-#define MAX_USERS 9
+#define MAX_USERS 10o
 #define MAX_CHARS_PER_LINE 241
 #define EXIT_CODE -1
 #define BOOT_CODE 1
@@ -37,6 +37,8 @@ struct Task
     task_status_enum task_status;
 
     is_group_task_enum is_group_task;
+
+    struct Task* next_task_ptr;
 };
 typedef struct Task Task;
 
@@ -46,7 +48,7 @@ struct User
 
     char* user_passwd;
 
-    Task* task_list[DEF_TASK_LIST_SIZE];
+    Task* first_task_ptr;
 
     int task_count;
 };
@@ -129,13 +131,21 @@ void decrypt_daf_text(char* char_ptr)
 
 int find_task_in_user_list_by_name(User* user_ptr, char* task_name)
 {
-    for (int i = 0; i < user_ptr->task_count; i++)
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    int current_task_index = 0;
+
+    while (current_task_ptr != NULL)
     {
-        if (strcmp(user_ptr->task_list[i]->task_name, task_name) == 0)
+        if (strcmp(current_task_ptr->task_name, task_name) == 0)
         {
             //return the index in the user's task list at which the task with the same name was found at
-            return i;
+            return current_task_index;
         }
+
+        current_task_ptr = current_task_ptr->next_task_ptr;
+
+        current_task_index++;
     }
 
     //return an error code to indicate the task was not found in the user's task list
@@ -144,7 +154,14 @@ int find_task_in_user_list_by_name(User* user_ptr, char* task_name)
 
 void add_task_to_user_list(User* user_ptr, Task* task_to_add)
 {
-    user_ptr->task_list[user_ptr->task_count] = task_to_add;
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    while (current_task_ptr->next_task_ptr != NULL)
+    {
+        current_task_ptr = current_task_ptr->next_task_ptr;
+    }
+
+    current_task_ptr->next_task_ptr = task_to_add;
 
     user_ptr->task_count++;
 }
@@ -156,8 +173,15 @@ int submit_task_for_user(User* user_ptr, int task_index)
     unsuccessful
     */
 
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    for (int i = 0; i <= task_index; i++)
+    {
+        current_task_ptr = current_task_ptr->next_task_ptr;
+    }
+
     //error handling
-    if (user_ptr->task_list[task_index] == NULL)
+    if (current_task_ptr == NULL)
     {
         //printf("Error: Pointer to task at specified index: %d is null.\n", task_index);
 
@@ -189,9 +213,9 @@ int submit_task_for_user(User* user_ptr, int task_index)
     returns 2 if assignment has already been submitted
     returns 3 if exam has already been marked as finished
     */
-    if (user_ptr->task_list[task_index]->task_type == ASSIGNMENT)
+    if (current_task_ptr->task_type == ASSIGNMENT)
     {
-        if (user_ptr->task_list[task_index]->task_status == SUBMITTED)
+        if (current_task_ptr->task_status == SUBMITTED)
         {
             //printf("Error: The selected assignment at index %d has already been submitted.\n", task_index);
 
@@ -199,16 +223,16 @@ int submit_task_for_user(User* user_ptr, int task_index)
         }
         else
         {
-            user_ptr->task_list[task_index]->task_status = SUBMITTED;
+            current_task_ptr->task_status = SUBMITTED;
 
             //printf("Assignment submitted successfully.\n);
 
             return 0;
         }
     }
-    else if (user_ptr->task_list[task_index]->task_type == EXAM)
+    else if (current_task_ptr->task_type == EXAM)
     {
-        if (user_ptr->task_list[task_index]->task_status == FINISHED)
+        if (current_task_ptr->task_status == FINISHED)
         {
             //printf("Error: The selected exam at index %d has already been finished.\n", task_index);
 
@@ -216,7 +240,7 @@ int submit_task_for_user(User* user_ptr, int task_index)
         }
         else
         {
-            user_ptr->task_list[task_index]->task_status = FINISHED;
+            current_task_ptr->task_status = FINISHED;
 
             //printf("Exam finished successfully.\n);
 
@@ -238,12 +262,20 @@ int remove_task_from_user_list(User* user_ptr, int task_index)
         return -1;
     }
 
-    free(user_ptr->task_list[task_index]);
+    Task* prev_task_ptr = user_ptr->first_task_ptr;
 
-    for (int i = task_index; i < user_ptr->task_count; i++)
+    for (int i = 0; i <= task_index - 1; i++)
     {
-        user_ptr->task_list[i] = user_ptr->task_list[i + 1];
+        prev_task_ptr = prev_task_ptr->next_task_ptr;
     }
+
+    Task* current_task_ptr = prev_task_ptr->next_task_ptr;
+
+    Task* after_current_task_ptr = current_task_ptr->next_task_ptr;
+
+    free(current_task_ptr);
+
+    prev_task_ptr->next_task_ptr = after_current_task_ptr;
 
     user_ptr->task_count -= 1;
 
@@ -251,8 +283,12 @@ int remove_task_from_user_list(User* user_ptr, int task_index)
     return 0;
 }
 
-void print_tasks_in_list(Task** task_list_start_ptr, int task_list_size)
+void print_tasks_in_list(Task* task_list_start_ptr, int task_list_size)
 {
+    Task* current_task_ptr = task_list_start_ptr;
+
+    int i = 0;
+
     if (task_list_size == 0)
     {
         printf("No assignments and exams found.\n");
@@ -262,9 +298,9 @@ void print_tasks_in_list(Task** task_list_start_ptr, int task_list_size)
 
     printf("\nCurrent assignments and exams:\n");
 
-    for (int i = 0; i < task_list_size; i++)
+    while (current_task_ptr != NULL)
     {
-        if (task_list_start_ptr[i]->task_type == ASSIGNMENT)
+        if (current_task_ptr->task_type == ASSIGNMENT)
         {
             printf("%d. Assignment\n", i + 1);
         }
@@ -273,9 +309,9 @@ void print_tasks_in_list(Task** task_list_start_ptr, int task_list_size)
             printf("%d. Exam\n", i + 1);
         }
 
-        printf("Name: %s\n", task_list_start_ptr[i]->task_name);
+        printf("Name: %s\n", current_task_ptr->task_name);
 
-        if (task_list_start_ptr[i]->is_group_task == INDIVIDUAL)
+        if (current_task_ptr->is_group_task == INDIVIDUAL)
         {
             printf("Type: %s\n", "Individual");
         }
@@ -284,34 +320,38 @@ void print_tasks_in_list(Task** task_list_start_ptr, int task_list_size)
             printf("Type: %s\n", "Group");
         }
 
-        if (task_list_start_ptr[i]->task_status == NOT_SUBMITTED)
+        if (current_task_ptr->task_status == NOT_SUBMITTED)
         {
             printf("Status: %s\n", "Not Submitted");
         }
-        else if (task_list_start_ptr[i]->task_status == SUBMITTED)
+        else if (current_task_ptr->task_status == SUBMITTED)
         {
             printf("Status: %s\n", "Submitted");
         }
-        else if (task_list_start_ptr[i]->task_status == OVERDUE)
+        else if (current_task_ptr->task_status == OVERDUE)
         {
             printf("Status: %s\n", "Overdue");
         }
-        else if (task_list_start_ptr[i]->task_status == UPCOMING)
+        else if (current_task_ptr->task_status == UPCOMING)
         {
             printf("Status: %s\n", "Upcoming");
         }
-        else if (task_list_start_ptr[i]->task_status == FINISHED)
+        else if (current_task_ptr->task_status == FINISHED)
         {
             printf("Status: %s\n", "Finished");
         }
 
         printf("\n");
+
+        current_task_ptr = current_task_ptr->next_task_ptr;
+
+        i++;
     }
 }
 
 void print_tasks_for_user(User* user_ptr)
 {
-    print_tasks_in_list(user_ptr->task_list, user_ptr->task_count);
+    print_tasks_in_list(user_ptr->first_task_ptr, user_ptr->task_count);
 }
 
 void remove_user_in_list(User** user_list_start_ptr, int user_index)
@@ -397,6 +437,8 @@ void load_user_tasks_data(User* user_ptr)
 
     user_ptr->task_count = 0;
 
+    user_ptr->first_task_ptr = NULL;
+
     char temp_task_name[DEF_BUFFER_SIZE] = {0};
 
     int temp_task_type = 0;
@@ -405,9 +447,13 @@ void load_user_tasks_data(User* user_ptr)
 
     int temp_is_group_task = 0;
 
+    Task* current_task_ptr = NULL;
+
     while (fscanf(user_tasks_file_ptr, "%[^,],%d,%d,%d\n", temp_task_name, &temp_task_type, &temp_task_status, &temp_is_group_task) != EOF)
     {
         Task* new_task_ptr = (Task*)malloc(sizeof(Task));
+
+        new_task_ptr->next_task_ptr = NULL;
 
         new_task_ptr->task_name = (char*)malloc(sizeof(char) * DEF_BUFFER_SIZE);
 
@@ -419,7 +465,17 @@ void load_user_tasks_data(User* user_ptr)
 
         new_task_ptr->is_group_task = temp_is_group_task;
 
-        user_ptr->task_list[user_ptr->task_count] = new_task_ptr;
+        //Implementing initialization of linked list to store user's tasks
+        if (user_ptr->first_task_ptr == NULL)
+        {
+            user_ptr->first_task_ptr = new_task_ptr;
+        }
+        else
+        {
+            current_task_ptr->next_task_ptr = new_task_ptr;
+        }
+
+        current_task_ptr = new_task_ptr;
 
         user_ptr->task_count++;
     }
@@ -438,9 +494,26 @@ void save_user_tasks_data(User* user_ptr)
         return;
     }
 
+    /*Implementation for saving data in previous versions where user tasks were stored as a fixed size array
     for (int i = 0; i < user_ptr->task_count; i++)
     {
         fprintf(user_tasks_file_ptr, "%s,%d,%d,%d\n", user_ptr->task_list[i]->task_name, user_ptr->task_list[i]->task_type, user_ptr->task_list[i]->task_status, user_ptr->task_list[i]->is_group_task);
+    }
+    */
+
+    //Implementation for saving data for user's tasks to user's tasks data file for linked list storing user's tasks
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    if (user_ptr->task_count == 0)
+    {
+        return;
+    }
+
+    while (current_task_ptr != NULL)
+    {
+        fprintf(user_tasks_file_ptr, "%s,%d,%d,%d\n", current_task_ptr->task_name, current_task_ptr->task_type, current_task_ptr->task_status, current_task_ptr->is_group_task);
+
+        current_task_ptr = current_task_ptr->next_task_ptr;
     }
 }
 
@@ -529,6 +602,13 @@ void load_data()
 void save_data()
 {
     FILE* app_data_file_ptr = fopen(DEFAULT_DATA_FILE_NAME, "w");
+
+    if (app_data_file_ptr == NULL)
+    {
+        printf("Error: Unable to write to app data file.\n");
+
+        return;
+    }
 
     for (int i = 0; i < total_users_count; i++)
     {
@@ -801,7 +881,7 @@ void delete_account()
     printf("'%s' account not found.\n", temp_name_buffer);
 }
 
-int auto_create_python_files(char* file_name_prefix, int number_of_files, char* chosen_text)
+int auto_create_files(char* chosen_file_extension, char* file_name_prefix, int number_of_files, char* chosen_text)
 {
     for (int i = 0; i < number_of_files; i++)
     {
@@ -817,29 +897,216 @@ int auto_create_python_files(char* file_name_prefix, int number_of_files, char* 
 
         strcat(result_file_name, number_suffix);
 
-        strcat(result_file_name, ".py");
+        strcat(result_file_name, chosen_file_extension);
 
         //printf("Result python file name: %s\n", result_file_name);
 
         //printf("Chosen text is: %s\n", chosen_text);
 
         //Create and write chosen text to file
-        FILE* current_python_file_ptr = fopen(result_file_name, "w");
+        FILE* current_file_ptr = fopen(result_file_name, "w");
 
-        if (current_python_file_ptr == NULL)
+        if (current_file_ptr == NULL)
         {
             printf("Error: Unable to create python file.\n");
 
             return -1;
         }
 
-        fprintf(current_python_file_ptr,"%s\n", chosen_text);
+        fprintf(current_file_ptr,"%s\n", chosen_text);
 
-        fclose(current_python_file_ptr);
+        fclose(current_file_ptr);
     }
 
     return 0;
     //returns 0 if successful
+}
+
+int create_csv_file_with_user_tasks(User* user_ptr, char* csv_file_name)
+{
+    FILE* csv_file_ptr = fopen(csv_file_name, "w");
+
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    if (csv_file_ptr == NULL)
+    {
+        printf("Error: Unable to create a new CSV file.\n");
+
+        return -1;
+    }
+
+    fprintf(csv_file_ptr, "Type,Name,Individual/Group,Status\n");
+
+    while (current_task_ptr != NULL)
+    {
+        char task_type[DEF_BUFFER_SIZE] = {0};
+
+        if (current_task_ptr->task_type == ASSIGNMENT)
+        {
+            strcpy(task_type, "Assignment");
+        }
+        else
+        {
+            strcpy(task_type, "Exam");
+        }
+
+        char task_group_type[DEF_BUFFER_SIZE] = {0};
+
+        if (current_task_ptr->is_group_task == INDIVIDUAL)
+        {
+            strcpy(task_group_type, "Individual");
+        }
+        else
+        {
+            strcpy(task_group_type, "Group");
+        }
+
+        char task_status[DEF_BUFFER_SIZE] = {0};
+
+        if (current_task_ptr->task_status == SUBMITTED)
+        {
+            strcpy(task_status, "SUBMITTED");
+        }
+        else if (current_task_ptr->task_status == NOT_SUBMITTED)
+        {
+            strcpy(task_status, "NOT SUBMITTED");
+        }
+        else if (current_task_ptr->task_status == OVERDUE)
+        {
+            strcpy(task_status, "OVERDUE");
+        }
+        else if (current_task_ptr->task_status == UPCOMING)
+        {
+            strcpy(task_status, "UPCOMING");
+        }
+        else if (current_task_ptr->task_status == FINISHED)
+        {
+            strcpy(task_status, "FINISHED");
+        }
+
+        fprintf(csv_file_ptr, "%s,%s,%s,%s\n", task_type, current_task_ptr->task_name, task_group_type, task_status);
+
+        current_task_ptr = current_task_ptr->next_task_ptr;
+    }
+
+    fclose(csv_file_ptr);
+
+    return 0;
+    //returns 0 if successful, if an error has occurred a negative value will be returned instead
+}
+
+int import_user_tasks_csv(User* user_ptr, char* tasks_csv_name)
+{
+    FILE* tasks_csv_ptr = fopen(tasks_csv_name, "r");
+
+    if (tasks_csv_ptr == NULL)
+    {
+        printf("Error: Unable to find/load the specified CSV file.\n");
+
+        return -1;
+    }
+
+    Task* current_task_ptr = user_ptr->first_task_ptr;
+
+    for (int i = 0; i < user_ptr->task_count; i++)
+    {
+        free(current_task_ptr);
+
+        current_task_ptr = current_task_ptr->next_task_ptr;
+    }
+
+    char temp_task_type[DEF_BUFFER_SIZE] = {0};
+
+    char temp_task_name[DEF_BUFFER_SIZE] = {0};
+
+    char temp_task_group_type[DEF_BUFFER_SIZE] = {0};
+
+    char temp_task_status[DEF_BUFFER_SIZE] = {0};
+
+    user_ptr->task_count = 0;
+
+    current_task_ptr = user_ptr->first_task_ptr;
+
+    //skip first line, which contains header info
+    fscanf(tasks_csv_ptr, "%[^,],%[^,],%[^,],%[^\n]\n", temp_task_type, temp_task_name, temp_task_group_type, temp_task_status);
+
+    while (fscanf(tasks_csv_ptr, "%[^,],%[^,],%[^,],%[^\n]\n", temp_task_type, temp_task_name, temp_task_group_type, temp_task_status) != EOF)
+    {
+        /*printf("Importing new task from CSV file\n");
+
+        printf("Task type: %s\n", temp_task_type);
+
+        printf("Task name: %s\n", temp_task_name);
+
+        printf("Task group type: %s\n", temp_task_group_type);
+
+        printf("Task status: %s\n", temp_task_status);*/
+
+        Task* new_task_ptr = (Task*)malloc(sizeof(Task));
+
+        new_task_ptr->task_name = (char*)malloc(sizeof(char) * DEF_BUFFER_SIZE);
+
+        strcpy(new_task_ptr->task_name, temp_task_name);
+
+        //new_task_ptr->task_type = temp_task_type;
+        if (strcmp(temp_task_type, "Assignment") == 0)
+        {
+            new_task_ptr->task_type = ASSIGNMENT;
+        }
+        else if (strcmp(temp_task_type, "Exam") == 0)
+        {
+            new_task_ptr->task_type = EXAM;
+        }
+
+        //new_task_ptr->is_group_task = temp_is_group_task;
+        if (strcmp(temp_task_group_type, "Individual") == 0)
+        {
+            new_task_ptr->is_group_task = INDIVIDUAL;
+        }
+        else if (strcmp(temp_task_group_type, "Group") == 0)
+        {
+            new_task_ptr->is_group_task = GROUP;
+        }
+
+        //new_task_ptr->task_status = temp_task_status;
+        if (strcmp(temp_task_status, "NOT SUBMITTED") == 0)
+        {
+            new_task_ptr->task_status = NOT_SUBMITTED;
+        }
+        else if (strcmp(temp_task_status, "SUBMITTED") == 0)
+        {
+            new_task_ptr->task_status = SUBMITTED;
+        }
+        else if (strcmp(temp_task_status, "OVERDUE") == 0)
+        {
+            new_task_ptr->task_status = OVERDUE;
+        }
+        else if (strcmp(temp_task_status, "UPCOMING") == 0)
+        {
+            new_task_ptr->task_status = UPCOMING;
+        }
+        else if (strcmp(temp_task_status, "FINISHED") == 0)
+        {
+            new_task_ptr->task_status = FINISHED;
+        }
+
+        if (user_ptr->first_task_ptr == NULL)
+        {
+            user_ptr->first_task_ptr = new_task_ptr;
+        }
+        else
+        {
+            current_task_ptr->next_task_ptr = new_task_ptr;
+        }
+
+        current_task_ptr = new_task_ptr;
+
+        user_ptr->task_count++;
+    }
+
+    fclose(tasks_csv_ptr);
+
+    return 0;
 }
 
 /*
@@ -1247,7 +1514,7 @@ int main()
 
             printf("Exam '%s' removed successfully.\n", temp_name_buffer);
         }
-        else if (strcmp(command, "c_py") == 0)
+        else if (strcmp(command, "c_files") == 0)
         {
             if (current_app_user == &guest_user)
             {
@@ -1256,13 +1523,19 @@ int main()
                 continue;
             }
 
+            printf("Please enter the extension of the file you would like to create (e.g. .py for python file, .txt for text file): ");
+
+            char temp_file_extension_buffer[DEF_BUFFER_SIZE] = {0};
+
+            scanf("%s", temp_file_extension_buffer);
+
             printf("Please enter a starting file name: ");
 
             char temp_file_name_buffer[DEF_BUFFER_SIZE] = {0};
 
             scanf(" %[^\n]s", temp_file_name_buffer);
 
-            printf("Enter the number of python files you would like to create: ");
+            printf("Enter the number of files you would like to create: ");
 
             int files_creation_count = 1;
 
@@ -1274,16 +1547,16 @@ int main()
 
             scanf(" %[^\n]s", temp_chosen_text_buffer);
 
-            int python_file_auto_creation_status = auto_create_python_files(temp_file_name_buffer, files_creation_count, temp_chosen_text_buffer);
+            int file_auto_creation_status = auto_create_files(temp_file_extension_buffer, temp_file_name_buffer, files_creation_count, temp_chosen_text_buffer);
 
             //0 indicating success
-            if (python_file_auto_creation_status == 0)
+            if (file_auto_creation_status == 0)
             {
-                printf("%d python files created successfully.\n", files_creation_count);
+                printf("%d '%s' files created successfully.\n", files_creation_count, temp_file_extension_buffer);
             }
             else
             {
-                printf("Error: Unable to create python files.\n");
+                printf("Error: Unable to create '%s' files.\n", temp_file_extension_buffer);
             }
         }
         else if (strcmp(command, "finish_exam") == 0)
@@ -1346,6 +1619,68 @@ int main()
             password_mask_on = 0;
 
             printf("Password masking disabled successfully.\n");
+        }
+        else if (strcmp(command, "export_tasks_csv") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently not logged into any account yet. You must be logged into an account to use this feature.\n");
+
+                continue;
+            }
+
+            printf("Enter the name of the CSV file you would like to create: ");
+
+            char chosen_csv_name[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", chosen_csv_name);
+
+            strcat(chosen_csv_name, ".csv");
+
+            printf("Creating CSV file, please wait...\n");
+
+            int csv_creation_result = create_csv_file_with_user_tasks(current_app_user, chosen_csv_name);
+
+            if (csv_creation_result == 0)
+            {
+                printf("A CSV file containing your tasks with the name '%s' has been created successfully.\n", chosen_csv_name);
+            }
+            else
+            {
+                printf("Unable to create the CSV file.\n");
+            }
+        }
+        else if (strcmp(command, "import_tasks_csv") == 0)
+        {
+            if (current_app_user == &guest_user)
+            {
+                printf("You are currently not logged into any account yet. You must be logged into an account to use this feature.\n");
+
+                continue;
+            }
+
+            printf("Enter the name of the CSV file you would like to import: ");
+
+            char chosen_csv_name[DEF_BUFFER_SIZE] = {0};
+
+            scanf(" %[^\n]s", chosen_csv_name);
+
+            strcat(chosen_csv_name, ".csv");
+
+            printf("Importing CSV file, please wait...\n");
+
+            int csv_import_result = import_user_tasks_csv(current_app_user, chosen_csv_name);
+
+            if (csv_import_result == 0)
+            {
+                printf("Task data imported successfully from the CSV file with the name '%s'.\n", chosen_csv_name);
+
+                save_user_tasks_data(current_app_user);
+            }
+            else
+            {
+                printf("Unable to import task data from the CSV file with the name '%s'.\n", chosen_csv_name);
+            }
         }
         else
         {

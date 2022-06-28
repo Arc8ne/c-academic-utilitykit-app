@@ -12,11 +12,15 @@ submit_assignment: to submit an assignment
 add_exam: to add an exam
 remove_exam: to remove an existing exam
 finish_exam: to mark an existing exam as finished
-c_py: short form for "create python files", automatically create a chosen number of files (specified by user) with user determined
-prefixes included in the file name to make them more easily identifiable, optionally the user can also choose to write some text to each file
+c_files: short form for "create files", automatically create a chosen number of files (specified by user) with a file extension
+specified by the user (e.g. .py for python files, .txt for text files, .csv for CSV files etc) with user determined prefixes
+included in the file name to make them more easily identifiable, optionally the user can also choose to write some text to each
+file
 enable_mask: enables password masking, which is always enabled by default to reduce the risk of others seeing your password while
 you enter it, it is recommended to leave this setting enabled
 disable_mask: disables password masking, which may increase the risk of others seeing your password while you enter it
+export_tasks_csv: exports all task related information for the user as a CSV file
+import_tasks_csv: imports all task related information for the user from a CSV file which the user can select
 
 Future commands (still in development):
 settings: grants access to application settings
