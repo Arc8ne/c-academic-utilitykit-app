@@ -9,7 +9,7 @@
 #define DEFAULT_DATA_FILE_PATH "C:\\Program Files\\poly_utility_app_data.daf"
 #define DEFAULT_CMD_INFO_FILE_NAME "poly_utility_cmd_info.txt"
 #define DEFAULT_CMD_INFO_FILE_PATH "C:\\Program Files\\poly_utility_cmd_info.txt"
-#define MAX_USERS 10o
+#define MAX_USERS 100
 #define MAX_CHARS_PER_LINE 241
 #define EXIT_CODE -1
 #define BOOT_CODE 1
@@ -63,6 +63,8 @@ int total_users_count = 0;
 User guest_user = {0};
 int app_message = 0;
 int password_mask_on = 1;
+//int is_app_data_encrypted = 0;
+//0 (false), 1 (true), stores information about whether the information in the app data file has been encrypted or not
 
 //Functions
 int copy_int_to_buffer(int number, char* char_ptr)
@@ -159,9 +161,15 @@ void add_task_to_user_list(User* user_ptr, Task* task_to_add)
     while (current_task_ptr->next_task_ptr != NULL)
     {
         current_task_ptr = current_task_ptr->next_task_ptr;
+
+        //printf("current task address: %p\n", current_task_ptr);
     }
 
+    //printf("About to add task.\n");
+
     current_task_ptr->next_task_ptr = task_to_add;
+
+    //printf("Added task successfully.\n");
 
     user_ptr->task_count++;
 }
@@ -481,15 +489,21 @@ void load_user_tasks_data(User* user_ptr)
     }
 
     fclose(user_tasks_file_ptr);
+
+    free(current_user_task_file_name);
 }
 
 void save_user_tasks_data(User* user_ptr)
 {
-    FILE* user_tasks_file_ptr = fopen(get_user_tasks_data_name(user_ptr), "w");
+    char* user_tasks_file_name = get_user_tasks_data_name(user_ptr);
+
+    FILE* user_tasks_file_ptr = fopen(user_tasks_file_name, "w");
 
     if (user_tasks_file_ptr == NULL)
     {
         printf("Error: Unable to write to/create tasks data file for user '%s'.\n", user_ptr->user_name);
+
+        free(user_tasks_file_name);
 
         return;
     }
@@ -506,6 +520,8 @@ void save_user_tasks_data(User* user_ptr)
 
     if (user_ptr->task_count == 0)
     {
+        free(user_tasks_file_name);
+
         return;
     }
 
@@ -515,6 +531,8 @@ void save_user_tasks_data(User* user_ptr)
 
         current_task_ptr = current_task_ptr->next_task_ptr;
     }
+
+    free(user_tasks_file_name);
 }
 
 void load_data()
@@ -545,11 +563,19 @@ void load_data()
 
         char temp_user_passwd[DEF_BUFFER_SIZE] = {0};
 
+        //int fscanf_result = 0;
+
         while (fscanf(data_file_ptr, "%s %s", temp_user_name, temp_user_passwd) != EOF)
         {
             /*
             decrypt the encrypted user names and passwords of each user only when the app starts up (so as to prevent
             data from being decrypted multiple times)
+            */
+
+            //printf("fscanf result: %d\n", fscanf_result);
+            /*
+            Note: fscanf function returns the number of words (not letters) scanned (e.g. in this case it returns 2 as there
+            are 2 words on each line scanned
             */
 
             if (app_message == BOOT_CODE)
@@ -825,7 +851,11 @@ int delete_user_files(User* user_ptr)
 {
     char* user_tasks_file_name = get_user_tasks_data_name(user_ptr);
 
-    return remove(user_tasks_file_name);
+    int remove_process_result = remove(user_tasks_file_name);
+
+    free(user_tasks_file_name);
+
+    return remove_process_result;
 }
 
 void delete_account()
@@ -881,7 +911,7 @@ void delete_account()
     printf("'%s' account not found.\n", temp_name_buffer);
 }
 
-int auto_create_files(char* chosen_file_extension, char* file_name_prefix, int number_of_files, char* chosen_text)
+int auto_create_files(char* chosen_file_extension, char* chosen_file_path, char* file_name_prefix, int number_of_files, char* chosen_text)
 {
     for (int i = 0; i < number_of_files; i++)
     {
@@ -904,11 +934,30 @@ int auto_create_files(char* chosen_file_extension, char* file_name_prefix, int n
         //printf("Chosen text is: %s\n", chosen_text);
 
         //Create and write chosen text to file
-        FILE* current_file_ptr = fopen(result_file_name, "w");
+        FILE* current_file_ptr = NULL;
+
+        if (strcmp(chosen_file_path, "default_path") == 0)
+        {
+            current_file_ptr = fopen(result_file_name, "w");
+        }
+        else
+        {
+            char current_file_path[_MAX_PATH] = {0};
+
+            strcat(current_file_path, chosen_file_path);
+
+            strcat(current_file_path, "\\");
+
+            strcat(current_file_path, result_file_name);
+
+            //printf("Chosen file path: %s\n", current_file_path);
+
+            current_file_ptr = fopen(current_file_path, "w");
+        }
 
         if (current_file_ptr == NULL)
         {
-            printf("Error: Unable to create python file.\n");
+            printf("Error: Unable to create %s file.\n", chosen_file_extension);
 
             return -1;
         }
@@ -1300,9 +1349,25 @@ int main()
 
             Task* new_user_task_ptr = (Task*)malloc(sizeof(Task));
 
+            if (new_user_task_ptr == NULL)
+            {
+                printf("Error: Unable to allocate memory for new Task data structure.\n");
+
+                continue;
+            }
+
             new_user_task_ptr->task_type = ASSIGNMENT;
 
-            new_user_task_ptr->task_name = malloc(sizeof(char) * DEF_BUFFER_SIZE);
+            new_user_task_ptr->task_name = (char*)malloc(sizeof(char) * DEF_BUFFER_SIZE);
+
+            new_user_task_ptr->next_task_ptr = NULL;
+
+            if (new_user_task_ptr->task_name == NULL)
+            {
+                printf("Error: Unable to allocate memory for new user task name char array.\n");
+
+                continue;
+            }
 
             printf("Enter the name of the assignment: ");
 
@@ -1313,6 +1378,8 @@ int main()
             char temp_char = 0;
 
             scanf("\n%c", &temp_char);
+
+            //printf("Evaluating char value...\n");
 
             if (temp_char == 'y' || temp_char == 'Y')
             {
@@ -1330,6 +1397,10 @@ int main()
             }
 
             new_user_task_ptr->task_status = NOT_SUBMITTED;
+
+            //printf("About to execute add task to user list function.\n");
+
+            //Segmentation fault occured after the uncommented line above, was caused by not initializing the value of next_task_ptr of the new_user_task_ptr to NULL before adding it to the linked list of tasks
 
             add_task_to_user_list(current_app_user, new_user_task_ptr);
 
@@ -1478,6 +1549,8 @@ int main()
 
             new_user_task_ptr->task_name = malloc(sizeof(char) * DEF_BUFFER_SIZE);
 
+            new_user_task_ptr->next_task_ptr = NULL;
+
             printf("Enter the name of the exam: ");
 
             scanf(" %[^\n]s", new_user_task_ptr->task_name);
@@ -1529,6 +1602,12 @@ int main()
 
             scanf("%s", temp_file_extension_buffer);
 
+            printf("Please enter the path to the folder/directory you would like the files to be created in (If you are unsure of where to save the files to, just type in 'default_path' for this field, which will create the files in the same folder as the one that this application is located in): ");
+
+            char temp_file_path[_MAX_PATH] = {0};
+
+            scanf(" %[^\n]s", temp_file_path);
+
             printf("Please enter a starting file name: ");
 
             char temp_file_name_buffer[DEF_BUFFER_SIZE] = {0};
@@ -1541,13 +1620,13 @@ int main()
 
             scanf("%d", &files_creation_count);
 
-            printf("Enter some text you would like to put into the newly created python files: ");
+            printf("Enter some text you would like to put into the newly created %s files: ", temp_file_extension_buffer);
 
             char temp_chosen_text_buffer[MAX_CHARS_PER_LINE] = {0};
 
             scanf(" %[^\n]s", temp_chosen_text_buffer);
 
-            int file_auto_creation_status = auto_create_files(temp_file_extension_buffer, temp_file_name_buffer, files_creation_count, temp_chosen_text_buffer);
+            int file_auto_creation_status = auto_create_files(temp_file_extension_buffer, temp_file_path, temp_file_name_buffer, files_creation_count, temp_chosen_text_buffer);
 
             //0 indicating success
             if (file_auto_creation_status == 0)
